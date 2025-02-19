@@ -2,6 +2,8 @@ package study.querydsl;
 
 import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
+import com.querydsl.core.types.dsl.CaseBuilder;
+import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,7 +16,6 @@ import study.querydsl.entity.QMember;
 import study.querydsl.entity.QTeam;
 import study.querydsl.entity.Team;
 
-import java.sql.SQLOutput;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
@@ -289,6 +290,69 @@ public class QuerydslBasicTest {
                 .join(member.team, team).fetchJoin()
                 .where(member.username.eq("member1"))
                 .fetchOne();
+    }
+
+    /* 서브쿼리
+    * 1) 나이가 가장 많은 회원 조회 (eq 사용)
+    * */
+    @Test
+    public void subQuery() throws Exception {
+        JPAQueryFactory queryFactory = new JPAQueryFactory(em);
+        QMember memberSub = new QMember("memberSub");
+
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .where(member.age.eq(
+                        //Member를 한 번 더 불러오므로 다른 QMember 이용
+                        JPAExpressions
+                                .select(memberSub.age.max())
+                                .from(memberSub)
+                ))
+                .fetch();
+    }
+
+    /* 서브쿼리
+    * 2) 여러 건 처리 in 사용
+    * */
+    @Test
+    public void subQueryIn() throws Exception{
+        JPAQueryFactory queryFactory = new JPAQueryFactory(em);
+        QMember memberSub = new QMember("memberSub");
+
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .where(member.age.in(
+                        JPAExpressions
+                                .select(memberSub.age)
+                                .from(memberSub)
+                ))
+                .fetch();
+    }
+
+    /* Case문
+     * select, 조건절(where), order by에서 사용 가능
+    * */
+    @Test
+    public void fetchCase() throws Exception{
+        JPAQueryFactory queryFactory = new JPAQueryFactory(em);
+
+        //단순 조건
+        List<String> result = queryFactory
+                .select(member.age
+                        .when(10).then("열살")
+                        .when(20).then("스무살")
+                        .otherwise("기타"))
+                .from(member)
+                .fetch();
+
+        //복잡한 조건
+        List<String> result2 = queryFactory
+                .select(new CaseBuilder()
+                        .when(member.age.between(0,20)).then("0~20살")
+                        .when(member.age.between(21,30)).then("21~30살")
+                        .otherwise("기타"))
+                .from(member)
+                .fetch();
     }
 
 }
